@@ -1,54 +1,40 @@
-import { pool } from '../../db.js';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import { useState } from 'react';
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Only POST method allowed' });
-  }
+export default function AdminLogin() {
+  const [error, setError] = useState('');
 
-  const { email, password } = req.body;
-  const role = req.query.role; // Read role from query param like ?role=user
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
 
-  if (!role) {
-    return res.status(400).json({ message: 'Missing role in login request' });
-  }
+    const email = e.target.email.value;
+    const password = e.target.password.value;
 
-  console.log(`Login attempt for ${role}:`, email);
+    const res = await fetch('/api/login?role=admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
 
-  try {
-    // Determine table based on role
-    let table;
-    if (role === 'user') table = 'tire';
-    else if (role === 'hr') table = 'hr';
-    else if (role === 'admin') table = 'admin';
-    else return res.status(400).json({ message: 'Invalid role' });
+    const data = await res.json();
 
-    // Query user from respective table
-    const result = await pool.query(`SELECT * FROM ${table} WHERE email = $1`, [email]);
-    const user = result.rows[0];
-
-    if (!user) {
-      return res.status(401).json({ message: 'User not found' });
+    if (res.ok) {
+      alert('Login successful!');
+      window.location.href = '/admin/dashboard';
+    } else {
+      setError(data.message);
     }
-
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) {
-      return res.status(401).json({ message: 'Invalid password' });
-    }
-
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role },  // include role in token
-      process.env.JWT_SECRET || 'secret123',
-      { expiresIn: '1h' }
-    );
-
-    // Set token in cookie
-    res.setHeader('Set-Cookie', `token=${token}; Path=/; Max-Age=3600; HttpOnly; SameSite=Lax`);
-    return res.status(200).json({ message: 'Login successful', role });
-
-  } catch (error) {
-    console.error('Login error:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
   }
+
+  return (
+    <div style={{ maxWidth: 400, margin: '80px auto', fontFamily: 'Arial' }}>
+      <h2>Admin Login</h2>
+      <form onSubmit={handleSubmit}>
+        <input type="email" name="email" placeholder="Email" required />
+        <input type="password" name="password" placeholder="Password" required />
+        <button type="submit">Login</button>
+        {error && <p style={{ color: 'red' }}>{error}</p>}
+      </form>
+    </div>
+  );
 }
