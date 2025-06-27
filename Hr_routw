@@ -1,0 +1,62 @@
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from datetime import datetime
+from db import pool  # your db.py with PostgreSQL connection
+
+router = APIRouter()
+
+class ScheduleRequest(BaseModel):
+    scheduled_date: str  # ISO format
+    hr_comment: str
+
+# Accept a user
+@router.post("/accept_user/{user_id}")
+async def accept_user(user_id: int):
+    try:
+        await pool.execute(
+            "INSERT INTO hr_decision (user_id, decision, hr_comment) VALUES ($1, 'accepted', '')",
+            user_id
+        )
+        return {"message": f"User {user_id} accepted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Reject a user
+@router.post("/reject_user/{user_id}")
+async def reject_user(user_id: int):
+    try:
+        await pool.execute(
+            "INSERT INTO hr_decision (user_id, decision, hr_comment) VALUES ($1, 'rejected', '')",
+            user_id
+        )
+        return {"message": f"User {user_id} rejected"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Schedule interview
+@router.post("/schedule_interview/{user_id}")
+async def schedule_interview(user_id: int, payload: ScheduleRequest):
+    try:
+        await pool.execute(
+            """
+            UPDATE hr_decision
+            SET scheduled_date = $1, hr_comment = $2
+            WHERE user_id = $3
+            """,
+            payload.scheduled_date, payload.hr_comment, user_id
+        )
+        return {"message": f"Interview scheduled for user {user_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# View all HR decisions
+@router.get("/hr_decisions")
+async def get_hr_decisions():
+    try:
+        records = await pool.fetch("SELECT * FROM hr_decision")
+        return {"decisions": records}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
